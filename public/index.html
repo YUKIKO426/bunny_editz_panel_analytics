@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bunny Editz Panel</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; }
+    header { background: #2c3e50; color: white; padding: 10px 20px; font-size: 24px; }
+    nav { background: #34495e; display: flex; gap: 15px; padding: 10px; }
+    nav a { color: white; text-decoration: none; font-weight: bold; }
+    .container { padding: 20px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 0 5px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+    .key-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+    .key-tag { padding: 3px 8px; border-radius: 5px; color: white; font-size: 12px; }
+    .green { background-color: #27ae60; }
+    .red { background-color: #c0392b; }
+    .orange { background-color: #f39c12; }
+    input, button { padding: 8px; margin: 5px; }
+    #searchInput { width: 100%; padding: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #ecf0f1; }
+  </style>
+</head>
+<body>
+  <header>Bunny Editz Key Panel</header>
+  <nav>
+    <a href="#" onclick="showPage('home')">Home</a>
+    <a href="#" onclick="showPage('keys')">All Keys</a>
+    <a href="#" onclick="showPage('add')">Add Key</a>
+  
+    <a href="#" onclick="showPage('logs')">Logs</a>
+<a href="#" onclick="showPage('analytics')">Analytics</a></nav>
+
+  <div class="container" id="home">
+    <div class="card">
+      <h2>Working Keys</h2>
+      <div id="activeKeysList"></div>
+    </div>
+  </div>
+
+  <div class="container" id="keys" style="display:none">
+    <div class="card">
+      <h2>All Keys</h2>
+      <input type="text" id="searchInput" placeholder="Search key..." onkeyup="filterKeys()"/>
+      <button onclick="exportCSV()">Export to CSV</button>
+      <table id="keyTable">
+        <thead>
+          <tr><th>Key</th><th>Status</th><th>Duration</th><th>Created</th><th>Expires In</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="container" id="add" style="display:none">
+    <div class="card">
+      <h2>Add Key</h2>
+      <input type="text" id="newKey" placeholder="Key"/>
+      <input type="number" id="newDuration" placeholder="Duration (days)"/>
+      <button onclick="addManualKey()">Add</button>
+    </div>
+  </div>
+
+  <script>
+    function showPage(id) {
+      document.querySelectorAll('.container').forEach(c => c.style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+    }
+
+    function fetchKeys() {
+      fetch("/keys").then(res => res.json()).then(data => {
+        const activeList = document.getElementById("activeKeysList");
+        const tbody = document.querySelector("#keyTable tbody");
+        activeList.innerHTML = '';
+        tbody.innerHTML = '';
+        const now = Date.now();
+
+        for (let key in data) {
+          const k = data[key];
+          const remaining = k.expiry - now;
+          const expiresIn = remaining > 0 ? Math.floor(remaining / 86400000) + "d" : "Expired";
+          const tag = k.activated ? 'green' : (remaining > 0 ? 'orange' : 'red');
+          const status = k.activated ? 'Activated' : (remaining > 0 ? 'Not Activated' : 'Expired');
+
+          if (remaining > 0 && k.activated) {
+            activeList.innerHTML += `<div class='key-row'><b>${key}</b><span class='key-tag green'>Active</span></div>`;
+          }
+
+          tbody.innerHTML += `
+            <tr>
+              <td>${key}</td>
+              <td><span class="key-tag ${tag}">${status}</span></td>
+              <td>${k.duration}d</td>
+              <td>${new Date(k.created).toLocaleDateString()}</td>
+              <td>${expiresIn}</td>
+            </tr>
+          `;
+        }
+      });
+    }
+
+    function filterKeys() {
+      const val = document.getElementById("searchInput").value.toLowerCase();
+      const rows = document.querySelectorAll("#keyTable tbody tr");
+      rows.forEach(row => {
+        row.style.display = row.innerText.toLowerCase().includes(val) ? '' : 'none';
+      });
+    }
+
+    function exportCSV() {
+      let csv = "Key,Status,Duration,Created,Expires In\n";
+      const rows = document.querySelectorAll("#keyTable tbody tr");
+      rows.forEach(row => {
+        csv += Array.from(row.children).map(td => td.innerText).join(",") + "\n";
+      });
+      const blob = new Blob([csv], {type: 'text/csv'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = "keys.csv";
+      link.click();
+    }
+
+    function addManualKey() {
+      const key = document.getElementById("newKey").value;
+      const duration = parseInt(document.getElementById("newDuration").value);
+      if (!key || !duration) return alert("Fill in both fields.");
+      fetch("/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "token": "admin123"
+        },
+        body: JSON.stringify({ key, duration })
+      }).then(res => {
+        if (!res.ok) return alert("Failed to create key");
+        return res.json();
+      }).then(() => {
+        alert("Key added!");
+        document.getElementById("newKey").value = "";
+        document.getElementById("newDuration").value = "";
+        fetchKeys();
+
+function loadAnalytics() {
+  fetch("/analytics", {
+    headers: { token: "admin123" }
+  })
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("totalKeys").innerText = data.total;
+    document.getElementById("activatedKeys").innerText = data.activated;
+    document.getElementById("expiredKeys").innerText = data.expired;
+    document.getElementById("uniqueIPs").innerText = data.uniqueIPs;
+    document.getElementById("activations24h").innerText = data.activations24h;
+  });
+}
+setInterval(loadAnalytics, 5000);
+loadAnalytics();
+
+
+    fetch("/logs", {
+      headers: { token: "admin123" }
+    }).then(res => res.json()).then(logs => {
+      const logTable = document.querySelector("#logTable tbody");
+      logTable.innerHTML = "";
+      logs.reverse().forEach(log => {
+        logTable.innerHTML += `
+          <tr>
+            <td>${new Date(log.time).toLocaleString()}</td>
+            <td>${log.key}</td>
+            <td>${log.ip}</td>
+            <td>${log.success ? 'Success' : 'Failed'}</td>
+          </tr>
+        `;
+      });
+    });
+
+        showPage('keys');
+      });
+    }
+
+    fetchKeys();
+
+function loadAnalytics() {
+  fetch("/analytics", {
+    headers: { token: "admin123" }
+  })
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("totalKeys").innerText = data.total;
+    document.getElementById("activatedKeys").innerText = data.activated;
+    document.getElementById("expiredKeys").innerText = data.expired;
+    document.getElementById("uniqueIPs").innerText = data.uniqueIPs;
+    document.getElementById("activations24h").innerText = data.activations24h;
+  });
+}
+setInterval(loadAnalytics, 5000);
+loadAnalytics();
+
+
+    fetch("/logs", {
+      headers: { token: "admin123" }
+    }).then(res => res.json()).then(logs => {
+      const logTable = document.querySelector("#logTable tbody");
+      logTable.innerHTML = "";
+      logs.reverse().forEach(log => {
+        logTable.innerHTML += `
+          <tr>
+            <td>${new Date(log.time).toLocaleString()}</td>
+            <td>${log.key}</td>
+            <td>${log.ip}</td>
+            <td>${log.success ? 'Success' : 'Failed'}</td>
+          </tr>
+        `;
+      });
+    });
+
+  </script>
+
+  <div class="container" id="logs" style="display:none">
+    <div class="card">
+      <h2>Activation Logs</h2>
+      <table id="logTable">
+        <thead>
+          <tr><th>Time</th><th>Key</th><th>IP</th><th>Status</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+
+  <div class="container" id="analytics" style="display:none">
+    <div class="card">
+      <h2>Real-time Analytics</h2>
+      <p><strong>Total Keys:</strong> <span id="totalKeys">0</span></p>
+      <p><strong>Activated Keys:</strong> <span id="activatedKeys">0</span></p>
+      <p><strong>Expired Keys:</strong> <span id="expiredKeys">0</span></p>
+      <p><strong>Unique IPs:</strong> <span id="uniqueIPs">0</span></p>
+      <p><strong>Activations (24h):</strong> <span id="activations24h">0</span></p>
+    </div>
+  </div>
+
+</body>
+</html>
